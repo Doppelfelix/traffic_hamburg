@@ -51,7 +51,7 @@ for rowindex, station in tqdm(all_stations.iterrows()):
         + "?$top=5000&$skip={}&$orderby=phenomenonTime+desc"
     )
     try:
-        for i in (0, 10000000, 5000):
+        for i in range(0, 10000000, 5000):
             obs_iter = pd.DataFrame(
                 json.loads(urlopen(obs_url.format(i)).read())["value"]
             )
