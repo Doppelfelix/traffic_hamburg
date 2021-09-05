@@ -42,14 +42,18 @@ all_stations = pd.DataFrame(json.loads(response.read())["value"])
 
 for rowindex, station in tqdm(all_stations.iterrows()):
     current_station = pd.DataFrame()  # used for uploading
-
-    datastream = pd.DataFrame(
-        json.loads(urlopen(station["Datastreams@iot.navigationLink"]).read())["value"]
-    ).iloc[0]
-    obs_url = (
-        datastream["Observations@iot.navigationLink"]
-        + "?$top=5000&$skip={}&$orderby=phenomenonTime+desc"
-    )
+    try:
+        datastream = pd.DataFrame(
+            json.loads(urlopen(station["Datastreams@iot.navigationLink"]).read())[
+                "value"
+            ]
+        ).iloc[0]
+        obs_url = (
+            datastream["Observations@iot.navigationLink"]
+            + "?$top=5000&$skip={}&$orderby=phenomenonTime+desc"
+        )
+    except Exception("No Datastream found!"):
+        continue
     try:
         for i in range(0, 10000000, 5000):
             obs_iter = pd.DataFrame(
