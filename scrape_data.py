@@ -8,7 +8,7 @@ import datetime
 
 # Construct a BigQuery client object.
 client = bigquery.Client()
-table_id = "hamtraffic.all_data.iot_values"
+table_id = "hamtraffic.all_data.bike_stations"
 
 job_config = bigquery.LoadJobConfig(
     # Specify a (partial) schema. All columns are always written to the
@@ -32,35 +32,60 @@ job_config = bigquery.LoadJobConfig(
 )
 
 
-data = pd.DataFrame()
+base_url_bikes = "https://iot.hamburg.de/v1.1/Things?$skip=0&$top=5000&$filter=((properties%2Ftopic+eq+%27Transport+und+Verkehr%27)+and+(properties%2FownerThing+eq+%27DB+Connect%27))"
 
-url = "https://iot.hamburg.de/v1.1/Observations?$skip={}"
+response = urlopen(base_url_bikes)
+all_stations = pd.DataFrame(json.loads(response.read())["value"])
 
-for i in tqdm(range(0, 1010000, 100)):
+for station in tqdm(all_stations):
+    current_station = pd.DataFrame()  # used for uploading
+
+    datastream = pd.DataFrame(
+        json.loads(urlopen(station["Datastreams@iot.navigationLink"]).read())["value"]
+    ).iloc[0]
+    obs_url = (
+        datastream["Observations@iot.navigationLink"]
+        + "?$top=5000&$skip={}&$orderby=phenomenonTime+desc"
+    )
     try:
-        response = urlopen(url.format(i))
-        df_slice = pd.DataFrame(json.loads(response.read())["value"])
-        data = data.append(
-            df_slice.filter(
-                items=[
-                    "@iot.id",
-                    "result",
-                    "resultTime",
+        for i in (0, 10000000, 5000):
+            obs_iter = pd.DataFrame(
+                json.loads(urlopen(obs_url.format(i)).read())["value"]
+            )
+            if len(obs_iter) == 0:
+                current_station.rename(
+                    {"@iot_id": "observationID"},
+                    inplace=True,
+                )
+                current_station["resultTime"] = pd.to_datetime(
+                    current_station["resultTime"]
+                )
+                current_station["result"] = pd.to_numeric(
+                    current_station["result"], errors="coerce"
+                )
+                current_station["thingID"] = station["@iot.id"]
+                current_station["thingDescriptipn"] = station["name"]
+                current_station["observedAreaType"] = datastream.observedArea["type"]
+                current_station["observedAreaCoordinates"] = datastream.observedArea[
+                    "coordinates"
                 ]
-            )
-        )
-        if i % 10000 == 0:
-            data["iot_id"] = data["@iot.id"].astype(str)
-            data.drop("@iot.id", axis=1, inplace=True)
-            data["resultTime"] = pd.to_datetime(data["resultTime"])
-            data["result"] = pd.to_numeric(data["result"], errors="coerce")
+                job = client.load_table_from_dataframe(
+                    current_station,
+                    table_id,
+                    job_config=job_config,
+                )
+                job.result()
+                raise Exception("All Data for station has been uploaded to GBQ")
 
-            job = client.load_table_from_dataframe(
-                data,
-                table_id,
-                job_config=job_config,
+            current_station = current_station.append(
+                obs_iter.filter(
+                    items=[
+                        "@iot.id",
+                        "result",
+                        "resultTime",
+                    ]
+                )
             )
-            job.result()
-            data = pd.DataFrame()
-    except:
-        raise Exception("URL could not be found")
+
+    except Exception:
+        continue
