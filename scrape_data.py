@@ -52,7 +52,7 @@ for rowindex, station in tqdm(all_stations.iterrows()):
             datastream["Observations@iot.navigationLink"]
             + "?$top=5000&$skip={}&$orderby=phenomenonTime+desc"
         )
-    except Exception("No Datastream found!"):
+    except Exception():
         continue
     try:
         for i in range(0, 10000000, 5000):
@@ -83,7 +83,7 @@ for rowindex, station in tqdm(all_stations.iterrows()):
                     job_config=job_config,
                 )
                 job.result()
-                raise Exception("All Data for station has been uploaded to GBQ")
+                raise Exception()
 
             current_station = current_station.append(
                 obs_iter.filter(
