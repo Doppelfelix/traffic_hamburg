@@ -5,6 +5,7 @@ from tqdm import tqdm
 from google.cloud import bigquery
 import pytz
 import datetime
+import numpy as np
 
 # Construct a BigQuery client object.
 client = bigquery.Client()
@@ -17,7 +18,9 @@ job_config = bigquery.LoadJobConfig(
         #    # Specify the type of columns whose type cannot be auto-detected. For
         #    # example the "title" column uses pandas dtype "object", so its
         #    # data type is ambiguous.
-        bigquery.SchemaField("iot_id", bigquery.enums.SqlTypeNames.STRING),
+        # bigquery.SchemaField(
+        #    "observedAreaCoordinates", bigquery.enums.SqlTypeNames.S
+        # ),
         # bigquery.SchemaField("result", bigquery.enums.SqlTypeNames.FLOAT64),
         # bigquery.SchemaField("resultTime", bigquery.enums.SqlTypeNames.STRING),
     ],
@@ -37,7 +40,7 @@ base_url_bikes = "https://iot.hamburg.de/v1.1/Things?$skip=0&$top=5000&$filter=(
 response = urlopen(base_url_bikes)
 all_stations = pd.DataFrame(json.loads(response.read())["value"])
 
-for station in tqdm(all_stations):
+for rowindex, station in tqdm(all_stations.iterrows()):
     current_station = pd.DataFrame()  # used for uploading
 
     datastream = pd.DataFrame(
@@ -54,7 +57,7 @@ for station in tqdm(all_stations):
             )
             if len(obs_iter) == 0:
                 current_station.rename(
-                    {"@iot_id": "observationID"},
+                    columns={"@iot.id": "observationID"},
                     inplace=True,
                 )
                 current_station["resultTime"] = pd.to_datetime(
@@ -63,12 +66,13 @@ for station in tqdm(all_stations):
                 current_station["result"] = pd.to_numeric(
                     current_station["result"], errors="coerce"
                 )
+                [5, 5]
                 current_station["thingID"] = station["@iot.id"]
                 current_station["thingDescriptipn"] = station["name"]
-                current_station["observedAreaType"] = datastream.observedArea["type"]
-                current_station["observedAreaCoordinates"] = datastream.observedArea[
-                    "coordinates"
-                ]
+
+                current_station["observedAreaCoordinates"] = ",".join(
+                    [str(x) for x in datastream.observedArea["coordinates"][-1]]
+                )
                 job = client.load_table_from_dataframe(
                     current_station,
                     table_id,
