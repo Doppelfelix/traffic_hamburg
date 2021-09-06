@@ -52,7 +52,7 @@ for rowindex, station in tqdm(all_stations.iterrows()):
             datastream["Observations@iot.navigationLink"]
             + "?$top=5000&$skip={}&$orderby=phenomenonTime+desc"
         )
-    except Exception():
+    except:
         continue
     try:
         for i in range(0, 10000000, 5000):
@@ -83,7 +83,7 @@ for rowindex, station in tqdm(all_stations.iterrows()):
                     job_config=job_config,
                 )
                 job.result()
-                raise Exception()
+                break
 
             current_station = current_station.append(
                 obs_iter.filter(
@@ -94,6 +94,5 @@ for rowindex, station in tqdm(all_stations.iterrows()):
                     ]
                 )
             )
-
-    except Exception:
+    except:
         continue
