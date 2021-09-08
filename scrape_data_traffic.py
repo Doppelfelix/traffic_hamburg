@@ -35,7 +35,7 @@ job_config = bigquery.LoadJobConfig(
 )
 
 
-#base_url_bikes = "https://iot.hamburg.de/v1.1/Things?$skip=0&$top=5000&$filter=((properties%2Ftopic+eq+%27Transport+und+Verkehr%27)+and+(properties%2FownerThing+eq+%27Hamburg+Verkehrsanlagen%27))"
+# base_url_bikes = "https://iot.hamburg.de/v1.1/Things?$skip=0&$top=5000&$filter=((properties%2Ftopic+eq+%27Transport+und+Verkehr%27)+and+(properties%2FownerThing+eq+%27Hamburg+Verkehrsanlagen%27))"
 base_url_cars = "https://iot.hamburg.de/v1.1/Things?$skip=0&$top=5000&$filter=((properties%2Ftopic+eq+%27Transport+und+Verkehr%27)+and+(properties%2FownerThing+eq+%27Freie+und+Hansestadt+Hamburg%27))"
 
 
@@ -50,7 +50,9 @@ for rowindex, station in tqdm(all_stations.iterrows()):
                 "value"
             ]
         )
-        datastream = datastream_all[datastream_all.properties.apply(lambda x: x['aggregateDuration'] == "PT15M")]
+        datastream = datastream_all[
+            datastream_all.properties.apply(lambda x: x["aggregateDuration"] == "PT15M")
+        ].squeeze()
         obs_url = (
             datastream["Observations@iot.navigationLink"].item()
             + "?$top=5000&$skip={}&$orderby=phenomenonTime+desc"
@@ -77,7 +79,7 @@ for rowindex, station in tqdm(all_stations.iterrows()):
                 current_station["thingDescriptipn"] = station["name"]
 
                 current_station["observedAreaCoordinates"] = ",".join(
-                    [str(x) for x in datastream.observedArea["coordinates"][-1]]
+                    [str(x) for x in datastream.observedArea["coordinates"]]
                 )
                 job = client.load_table_from_dataframe(
                     current_station,
