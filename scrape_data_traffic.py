@@ -9,7 +9,7 @@ import numpy as np
 
 # Construct a BigQuery client object.
 client = bigquery.Client()
-table_id = "hamtraffic.all_data.bike_stations"
+table_id = "hamtraffic.all_data.car_traffic"
 
 job_config = bigquery.LoadJobConfig(
     # Specify a (partial) schema. All columns are always written to the
@@ -35,21 +35,24 @@ job_config = bigquery.LoadJobConfig(
 )
 
 
-base_url_bikes = "https://iot.hamburg.de/v1.1/Things?$skip=0&$top=5000&$filter=((properties%2Ftopic+eq+%27Transport+und+Verkehr%27)+and+(properties%2FownerThing+eq+%27DB+Connect%27))"
+#base_url_bikes = "https://iot.hamburg.de/v1.1/Things?$skip=0&$top=5000&$filter=((properties%2Ftopic+eq+%27Transport+und+Verkehr%27)+and+(properties%2FownerThing+eq+%27Hamburg+Verkehrsanlagen%27))"
+base_url_cars = "https://iot.hamburg.de/v1.1/Things?$skip=0&$top=5000&$filter=((properties%2Ftopic+eq+%27Transport+und+Verkehr%27)+and+(properties%2FownerThing+eq+%27Freie+und+Hansestadt+Hamburg%27))"
 
-response = urlopen(base_url_bikes)
+
+response = urlopen(base_url_cars)
 all_stations = pd.DataFrame(json.loads(response.read())["value"])
 
 for rowindex, station in tqdm(all_stations.iterrows()):
     current_station = pd.DataFrame()  # used for uploading
     try:
-        datastream = pd.DataFrame(
+        datastream_all = pd.DataFrame(
             json.loads(urlopen(station["Datastreams@iot.navigationLink"]).read())[
                 "value"
             ]
-        ).iloc[0]
+        )
+        datastream = datastream_all[datastream_all.properties.apply(lambda x: x['aggregateDuration'] == "PT15M")]
         obs_url = (
-            datastream["Observations@iot.navigationLink"]
+            datastream["Observations@iot.navigationLink"].item()
             + "?$top=5000&$skip={}&$orderby=phenomenonTime+desc"
         )
     except:
@@ -70,7 +73,6 @@ for rowindex, station in tqdm(all_stations.iterrows()):
                 current_station["result"] = pd.to_numeric(
                     current_station["result"], errors="coerce"
                 )
-                [5, 5]
                 current_station["thingID"] = station["@iot.id"]
                 current_station["thingDescriptipn"] = station["name"]
 
