@@ -1,18 +1,20 @@
-import apache_beam as beam
-import requests
 import json
 import logging
 from urllib.request import urlopen
-import pandas as pd
-from datetime import date, timedelta
+import argparse
 
-yesterday = date.today() - timedelta(days=1)
-yesterday = yesterday.strftime("%Y-%m-%d")
-table_spec = "hamtraffic:all_data.car_traffic_daily_updates"
-base_url_cars = "https://iot.hamburg.de/v1.1/Things?$skip=0&$top=5000&$filter=((properties%2Ftopic+eq+%27Transport+und+Verkehr%27)+and+(properties%2FownerThing+eq+%27Freie+und+Hansestadt+Hamburg%27))"
+import apache_beam as beam
+from apache_beam.options.pipeline_options import PipelineOptions
 
 
-# beam_options = PipelineOptions()
+class UserOptions(PipelineOptions):
+    @classmethod
+    def _add_argparse_args(cls, parser):
+        parser.add_value_provider_argument(
+            "--query_date",
+            type=str,
+            help="Query date for traffic data in format YYYY-MM-DD",
+        )
 
 
 def get_stations():
@@ -66,7 +68,10 @@ class get_obs_stream(beam.DoFn):
 
 
 class get_obs(beam.DoFn):
-    def process(self, element, date):
+    def __init__(self, query_date):
+        self.query_date = query_date
+
+    def process(self, element):
         logging.debug(f"Now fetching observations for {element['thingID']}")
 
         obs_url = (
@@ -75,7 +80,9 @@ class get_obs(beam.DoFn):
         )
         list_of_obs = []
         for i in range(0, 10000000, 5000):
-            obs_iter = json.loads(urlopen(obs_url.format(i, date)).read())["value"]
+            obs_iter = json.loads(
+                urlopen(obs_url.format(i, self.query_date.get())).read()
+            )["value"]
             if len(obs_iter) == 0:
                 break
             list_of_obs = list_of_obs + obs_iter
@@ -124,7 +131,9 @@ table_schema = {
 
 
 def run():
-    p = beam.Pipeline()
+    beam_options = PipelineOptions()
+    p = beam.Pipeline(options=beam_options)
+    args = beam_options.view_as(UserOptions)
 
     all_stations = get_stations()
 
@@ -135,9 +144,10 @@ def run():
         | "get obs stream" >> beam.ParDo(get_obs_stream())
         | "get obs"
         >> beam.ParDo(
-            get_obs(), yesterday
+            get_obs(args.query_date)
         )  # BASH: date -d "yesterday 13:00" '+%Y-%m-%d'
         | "clean obs" >> beam.ParDo(clean_obs())
+        # | "write to text" >> beam.io.WriteToText("./test_v2.csv")
         | "write into gbq"
         >> beam.io.gcp.bigquery.WriteToBigQuery(
             table=table_spec,
@@ -152,4 +162,8 @@ def run():
 
 
 if __name__ == "__main__":
+
+    table_spec = "hamtraffic:all_data.car_traffic_daily_updates_test"
+    # base_url_cars = "https://iot.hamburg.de/v1.1/Things?$skip=0&$top=5000&$filter=((properties%2Ftopic+eq+%27Transport+und+Verkehr%27)+and+(properties%2FownerThing+eq+%27Freie+und+Hansestadt+Hamburg%27))"
+    base_url_cars = "https://iot.hamburg.de/v1.1/Things?$filter=%40iot%2Eid%20eq%205972"
     run()

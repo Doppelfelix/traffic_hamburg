@@ -38,7 +38,6 @@ job_config = bigquery.LoadJobConfig(
 # base_url_bikes = "https://iot.hamburg.de/v1.1/Things?$skip=0&$top=5000&$filter=((properties%2Ftopic+eq+%27Transport+und+Verkehr%27)+and+(properties%2FownerThing+eq+%27Hamburg+Verkehrsanlagen%27))"
 base_url_cars = "https://iot.hamburg.de/v1.1/Things?$skip=0&$top=5000&$filter=((properties%2Ftopic+eq+%27Transport+und+Verkehr%27)+and+(properties%2FownerThing+eq+%27Freie+und+Hansestadt+Hamburg%27))"
 
-[1]
 
 response = urlopen(base_url_cars)
 all_stations = pd.DataFrame(json.loads(response.read())["value"])

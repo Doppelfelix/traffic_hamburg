@@ -7,6 +7,8 @@ import pytz
 import datetime
 import numpy as np
 
+"https://iot.hamburg.de/v1.1/Datastreams(107)/Observations?$skip=0&$orderby=phenomenonTime+desc&$filter=date(phenomenonTime)%20gt%20date(%20%272021-09-11%27)"
+
 # Construct a BigQuery client object.
 client = bigquery.Client()
 table_id = "hamtraffic.all_data.bike_stations"
