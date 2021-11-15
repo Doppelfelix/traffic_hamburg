@@ -6,6 +6,9 @@ import argparse
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
 
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
 
 class UserOptions(PipelineOptions):
     @classmethod
@@ -14,11 +17,12 @@ class UserOptions(PipelineOptions):
             "--query_date",
             type=str,
             help="Query date for traffic data in format YYYY-MM-DD",
+            required=True,
         )
 
 
 def get_stations():
-    logging.debug(f"Now fetching all stations data.")
+    logging.info(f"Now fetching all stations data.")
     response = json.loads(urlopen(base_url_cars).read())
     return response["value"]
 
@@ -43,7 +47,7 @@ class get_station_urls(beam.DoFn):
 
 class get_obs_stream(beam.DoFn):
     def process(self, element):
-        logging.debug(f"Now fetching streams for {element['thingID']}")
+        logging.info(f"Now fetching streams for {element['thingID']}")
         try:
             response = json.loads(urlopen(element["datastream_url"]).read())["value"]
             keep_datastream = [
@@ -72,7 +76,7 @@ class get_obs(beam.DoFn):
         self.query_date = query_date
 
     def process(self, element):
-        logging.debug(f"Now fetching observations for {element['thingID']}")
+        logging.info(f"Now fetching observations for {element['thingID']}")
 
         obs_url = (
             element["obs_stream"]
@@ -101,7 +105,7 @@ class get_obs(beam.DoFn):
 
 class clean_obs(beam.DoFn):
     def process(self, element):
-        logging.debug(f"Now cleaning observations for {element['thingID']}")
+        logging.info(f"Now cleaning observations for {element['thingID']}")
         observationID = element["@iot.id"]
         resultTime = element["resultTime"]
         result = element["result"]
@@ -142,20 +146,17 @@ def run():
         | "pass stations" >> beam.Create(all_stations)
         | "get station urls" >> beam.ParDo(get_station_urls())
         | "get obs stream" >> beam.ParDo(get_obs_stream())
-        | "get obs"
-        >> beam.ParDo(
-            get_obs(args.query_date)
-        )  # BASH: date -d "yesterday 13:00" '+%Y-%m-%d'
+        | "get obs" >> beam.ParDo(get_obs(args.query_date))
         | "clean obs" >> beam.ParDo(clean_obs())
-        # | "write to text" >> beam.io.WriteToText("./test_v2.csv")
-        | "write into gbq"
-        >> beam.io.gcp.bigquery.WriteToBigQuery(
-            table=table_spec,
-            schema=table_schema,
-            custom_gcs_temp_location="gs://hamtraf_bucket",
-            create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,
-            write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-        )
+        | "write to text" >> beam.io.WriteToText("./test_v2.csv")
+        # | "write into gbq"
+        # >> beam.io.gcp.bigquery.WriteToBigQuery(
+        #    table=table_spec,
+        #    schema=table_schema,
+        #    custom_gcs_temp_location="gs://hamtraf_bucket",
+        #    create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,
+        #    write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+        # )
     )
     result = p.run()
     result.wait_until_finish()
@@ -163,7 +164,6 @@ def run():
 
 if __name__ == "__main__":
 
-    table_spec = "hamtraffic:all_data.car_traffic_daily_updates_test"
-    # base_url_cars = "https://iot.hamburg.de/v1.1/Things?$skip=0&$top=5000&$filter=((properties%2Ftopic+eq+%27Transport+und+Verkehr%27)+and+(properties%2FownerThing+eq+%27Freie+und+Hansestadt+Hamburg%27))"
-    base_url_cars = "https://iot.hamburg.de/v1.1/Things?$filter=%40iot%2Eid%20eq%205972"
+    table_spec = "hamtraffic:all_data.car_traffic_daily_updates"
+    base_url_cars = "https://iot.hamburg.de/v1.1/Things?$skip=0&$top=5000&$filter=((properties%2FownerThing+eq+%27Freie+und+Hansestadt+Hamburg%27))"
     run()
